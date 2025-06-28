@@ -1,7 +1,7 @@
 import type { PluginContext } from '@breezeapi/core';
 import { loadDiscordConfig, loadCommands, loadEvents, loadContextMenus } from './loader.js';
 import { getClient, sendToChannel, Client } from './client.js';
-import { REST, Routes } from 'discord.js';
+import { REST, Routes, MessageFlags, ChatInputCommandInteraction, ButtonInteraction, ModalSubmitInteraction } from 'discord.js';
 import { Permissions } from './types.js';
 export { Intents, GatewayIntentBits } from './types.js';
 export type { DiscordContext, CommandOptions } from './types.js';
@@ -76,6 +76,51 @@ function commandsEqual(a: any[], b: any[]) {
     }
   }
   return true;
+}
+
+// Patch all relevant interaction types for safe replies
+const interactionClasses = [
+  ChatInputCommandInteraction,
+  ButtonInteraction,
+  ModalSubmitInteraction,
+  // Add more as needed (e.g., UserContextMenuCommandInteraction, MessageContextMenuCommandInteraction)
+];
+let patched = false;
+for (const InteractionClass of interactionClasses) {
+  if (InteractionClass && InteractionClass.prototype) {
+    patched = true;
+    const methods = ['reply', 'editReply', 'followUp'];
+    for (const method of methods) {
+      const orig = (InteractionClass.prototype as any)[method];
+      if (!orig) continue;
+      (InteractionClass.prototype as any)[method] = async function (options: any) {
+        if (typeof options === 'object' && options !== null) {
+          if ('ephemeral' in options) {
+            if (options.ephemeral) {
+              options.flags = (options.flags ?? 0) | MessageFlags.Ephemeral;
+            }
+            delete options.ephemeral;
+          }
+        }
+        if (this.replied || this.deferred) {
+          console.warn(`[Breeze Discord] Tried to ${method} on an already acknowledged interaction.`);
+          return;
+        }
+        try {
+          return await orig.call(this, options);
+        } catch (err: any) {
+          if (err?.code === 40060 || err?.message?.includes('already been acknowledged')) {
+            console.warn(`[Breeze Discord] Interaction already acknowledged, ${method} skipped.`);
+            return;
+          }
+          throw err;
+        }
+      };
+    }
+  }
+}
+if (!patched) {
+  console.warn('[Breeze Discord] Could not patch any Interaction prototypes: No relevant classes found.');
 }
 
 export async function discordPlugin(ctx: PluginContext) {
