@@ -17,9 +17,6 @@
     "packages/core": {
       "name": "@breezeapi/core",
       "version": "1.6.5",
-      "bin": {
-        "breeze": "cli.ts",
-      },
       "dependencies": {
         "@trpc/server": "^10.0.0",
         "prompts": "^2.4.2",
@@ -40,6 +37,9 @@
       },
       "devDependencies": {
         "@types/node": "^20.0.0",
+      },
+      "peerDependencies": {
+        "@breezeapi/core": "*",
       },
     },
     "packages/discord": {

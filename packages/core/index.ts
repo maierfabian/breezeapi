@@ -13,6 +13,7 @@ export { cors } from './core/cors';
 export { syncLayer } from './core/syncLayer';
 export { syncLayerSqlite } from './adapters/syncLayerSqlite';
 export { syncLayerRedis } from './adapters/syncLayerRedis';
+export * from './core/cron';
 
 /**
  * Plugin API: Plugins receive a context object with deep integration points.

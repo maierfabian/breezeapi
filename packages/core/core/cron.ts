@@ -1,4 +1,4 @@
-import type { PluginContext } from '@breezeapi/core';
+import type { PluginContext } from '../index';
 import { CronJob } from 'cron';
 import { join, relative } from 'node:path';
 import { readdir, stat } from 'node:fs/promises';
@@ -154,4 +154,4 @@ export async function cronPlugin(ctx: PluginContext) {
 }
 
 // Optionally export helpers/types
-export type { PluginContext } from '@breezeapi/core'; 
+export type { PluginContext } from '../index'; 
