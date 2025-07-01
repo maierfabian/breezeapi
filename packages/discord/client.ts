@@ -4,7 +4,7 @@ import { Intents } from './types.js';
 
 let client: DiscordClient | null = null;
 let ready = false;
-let restarting = false;
+let initializationPromise: Promise<DiscordClient> | null = null;
 const RESTART_DELAY_MS = 5000;
 
 // Helper: Create a proxy that automatically fetches when cache is accessed
@@ -41,9 +41,9 @@ function createAutoFetchProxy<T extends { fetch: () => Promise<any> }>(target: T
   });
 }
 
-export const Client = new Proxy({}, {
+export const Client: DiscordClient = new Proxy({}, {
   get(_target, prop) {
-    if (!client) throw new Error('Discord Client not initialized yet.');
+    if (!client || !ready) throw new Error('Discord Client not initialized yet.');
     // @ts-ignore
     return client[prop];
   }
@@ -109,61 +109,55 @@ function resolveIntents(intents: (number | IntentGroup)[]): number[] {
   return Array.from(new Set(bits));
 }
 
-async function startDiscordClient(config: { token: string, intents: any[], publicKey?: string }) {
-  if (client) {
-    try { await client.destroy(); } catch {}
-    client = null;
-    ready = false;
-  }
-  client = new DiscordClient({ intents: resolveIntents(config.intents) });
-  if (config.publicKey) (client as any).publicKey = config.publicKey;
-  client.once('ready', () => {
-    ready = true;
-    if (client && client.user) {
-      console.log(`[Breeze Discord] Bot started as @${client.user.tag} (ID: ${client.user.id})`);
-    } else {
-      console.log('[Breeze Discord] Bot started (no user info)');
+async function startDiscordClient(config: { token: string, intents: any[], publicKey?: string }): Promise<DiscordClient> {
+  // Wrap the entire logic in a promise
+  return new Promise(async (resolve, reject) => {
+    if (client) {
+      try { await client.destroy(); } catch {}
+      client = null;
+      ready = false;
     }
+
+    client = new DiscordClient({ intents: resolveIntents(config.intents) });
+    if (config.publicKey) (client as any).publicKey = config.publicKey;
+
+    client.once('ready', () => {
+      ready = true;
+      client = client as DiscordClient;
+      if (client && client.user) {
+        console.log(`[Breeze Discord] Bot started as @${client.user.tag} (ID: ${client.user.id})`);
+      } else {
+        console.log('[Breeze Discord] Bot started (no user info)');
+      }
+      resolve(client); 
+    });
+
+    client.on('error', (err) => {
+      console.error('[Breeze Discord] Client error:', err);
+      // If the client hasn't logged in yet, reject the promise
+      if (!ready) {
+        reject(err);
+      }
+    });
+
+    // ... (keep your other event listeners like shardDisconnect)
+
+    client.login(config.token).catch(err => {
+      console.error('[Breeze Discord] Login failed:', err);
+      // Reject the promise if login fails
+      reject(err);
+    });
   });
-  // Listen for fatal errors and disconnects
-  client.on('error', (err) => {
-    console.error('[Breeze Discord] Client error:', err);
-    scheduleRestart(config);
-  });
-  client.on('shardDisconnect', (event, shardId) => {
-    console.error(`[Breeze Discord] Shard ${shardId} disconnected:`, event);
-    scheduleRestart(config);
-  });
-  client.on('invalidated', () => {
-    console.error('[Breeze Discord] Client invalidated. Restarting...');
-    scheduleRestart(config);
-  });
-  try {
-    await client.login(config.token);
-  } catch (err) {
-    console.error('[Breeze Discord] Login failed:', err);
-    scheduleRestart(config);
-  }
-  return client;
 }
 
-function scheduleRestart(config: { token: string, intents: any[], publicKey?: string }) {
-  if (restarting) return;
-  restarting = true;
-  setTimeout(() => {
-    restarting = false;
-    console.log('[Breeze Discord] Attempting to restart bot...');
-    startDiscordClient(config);
-  }, RESTART_DELAY_MS);
+// getClient now manages the single initialization promise
+export function getClient(config: { token: string, intents: any[], publicKey?: string }): Promise<DiscordClient> {
+  if (!initializationPromise) {
+    initializationPromise = startDiscordClient(config);
+  }
+  return initializationPromise;
 }
 
-export function getClient(config: { token: string, intents: any[], publicKey?: string }) {
-  if (!client) {
-    // Start with restart logic
-    startDiscordClient(config);
-  }
-  return client;
-}
 
 // Helper: Send a message to a channel by ID (default: only text channels with .send)
 export async function sendToChannel(

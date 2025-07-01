@@ -172,10 +172,11 @@ export async function discordPlugin(ctx: PluginContext) {
 
     // Attach event handlers to client with proper error handling
     if (client) {
+      const resolvedClient = await client;
       for (const evt of events) {
-        client.on(evt.name, async (...args) => {
+        resolvedClient.on(evt.name, async (...args: unknown[]) => {
           try {
-            await evt.handler(...args);
+            await evt.handler(...(args as any));
           } catch (error) {
             console.error(`[Breeze Discord] Error in event handler ${evt.name}:`, error);
           }
@@ -204,7 +205,8 @@ export async function discordPlugin(ctx: PluginContext) {
 
     // Attach interactionCreate event
     if (client) {
-      client.on('interactionCreate', async (interaction) => {
+      const resolvedClient = await client;
+      resolvedClient.on('interactionCreate', async (interaction: any) => {
         if (!interaction.isChatInputCommand()) return;
         const handler = commandMap.get(interaction.commandName);
         if (!handler) return;
@@ -218,7 +220,7 @@ export async function discordPlugin(ctx: PluginContext) {
         }
         // Build context
         const ctx = {
-          client,
+          client: resolvedClient,
           interaction,
           options: optionsObj,
           reply: (data: any) => interaction.reply(data),
@@ -265,7 +267,7 @@ export async function discordPlugin(ctx: PluginContext) {
         }
       });
       // TODO: Wire up HTTP endpoint
-      (ctx as any).discord = client;
+      (ctx as any).discord = resolvedClient;
     } else {
       console.error('[Breeze Discord] Client is not initialized.');
     }

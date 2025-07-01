@@ -1,6 +1,6 @@
 {
   "name": "@breezeapi/discord",
-  "version": "0.2.9",
+  "version": "0.2.18",
   "description": "A discord plugin for breezeapi",
   "files": [
     "out"
@@ -12,7 +12,7 @@
     "build": "bun build index.ts --outdir ./out --target bun",
     "types": "tsc --emitDeclarationOnly --declaration --outDir ./out",
     "build:all": "bun run build && bun run types",
-    "release": "npm version patch && bun run build:all && npm publish"
+    "release": "npm version patch && bun run build:all && bun publish"
   },
   "publishConfig": {
     "directory": "out"
